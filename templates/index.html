@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Умный планировщик путешествий</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+    <div class="theme-switch">
+        <label class="switch">
+            <input type="checkbox" id="theme-toggle">
+            <span class="slider"></span>
+        </label>
+        <span class="theme-label">🌙</span>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>🌍 Умный планировщик путешествий</h1>
+            <p class="time">Сегодня {{ current_time }}</p>
+        </header>
+
+        <form method="POST" id="search-form">
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" name="city" placeholder="Введите город (напр. Москва)" value="{{ city or '' }}" required>
+                <input type="number" name="days" placeholder="Дни" value="{{ days }}" min="1" max="14" class="days-input">
+                <button type="submit" id="submit-btn">Показать план</button>
+            </div>
+            <div class="interests">
+                    <label><input type="checkbox" name="interests" value="culture"> Культура</label>
+                    <label><input type="checkbox" name="interests" value="nature"> Природа</label>
+                    <label><input type="checkbox" name="interests" value="food"> Гастрономия</label>
+                    <label><input type="checkbox" name="interests" value="nightlife"> Ночная жизнь</label>
+                </div>
+            <div class="spinner" id="loading-spinner" style="display:none;"></div>
+        </form>
+
+        <div style="text-align: center; margin: 15px 0;">
+            <a href="{{ url_for('suggest') }}" style="color: var(--btn-bg); font-weight: 600; text-decoration: none;">
+                🤔 Не знаю, куда поехать — посоветуй!
+            </a>
+        </div>
+
+        {% if error %}
+            <p class="error">{{ error }}</p>
+        {% endif %}
+
+
+        {% if weather %}
+            <section class="weather-section">
+                <h2>Погода в городе {{ city }} на {{ days }} дней</h2>
+                <div class="weather-scroll">
+                    {% for day in weather %}
+                        <div class="weather-card">
+                            <div class="weather-date">{{ day.date }}</div>
+                            <img src="http://openweathermap.org/img/wn/{{ day.icon }}@2x.png" alt="погода">
+                            <div class="temp">{{ day.temp }}°</div>
+                            <div class="desc">{{ day.description }}</div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
+
+        {% if request.form.getlist('interests') %}
+            <p style="color: var(--btn-bg); font-weight: 600; text-align: center;">
+                🎯 Подобрано с учётом ваших интересов: {{ request.form.getlist('interests') | join(', ') }}
+            </p>
+        {% endif %}
+
+        {% if recommendations %}
+            <section class="places-section">
+                <h2>Что посетить</h2>
+                {% if recommendations is iterable and recommendations is not string %}
+                    <div class="places-grid">
+                        {% for place in recommendations %}
+                            <div class="place-card">
+                                <div class="place-name">{{ place.name }}</div>
+                                <p class="place-desc">{{ place.description }}</p>
+                                <div class="place-meta">
+                                    <span>📍 {{ place.lat }}, {{ place.lon }}</span>
+                                    <span>💰 {{ place.cost }}</span>
+                                    <span>🕒 {{ place.best_time }}</span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="place-card">
+                        <p>{{ recommendations }}</p>
+                    </div>
+                {% endif %}
+            </section>
+        {% endif %}
+
+        {% if transport %}
+        <section class="extra-section">
+            <h2>🚌 Транспорт и цены</h2>
+            {% if transport is iterable and transport is not string %}
+                <div class="places-grid">
+                {% for item in transport %}
+                    <div class="place-card">
+                        <div class="place-name">{{ item.name }}</div>
+                        <p class="place-desc">{{ item.description }}</p>
+                        <div class="place-meta">
+                            <span>💰 {{ item.price }}</span>
+                        </div>
+                    </div>
+                {% endfor %}
+                </div>
+            {% else %}
+                <div class="info-card"><p>{{ transport }}</p></div>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        {% if restaurants %}
+        <section class="extra-section">
+            <h2>🍽️ Рестораны и развлечения</h2>
+            {% if restaurants is iterable and restaurants is not string %}
+                <div class="places-grid">
+                {% for item in restaurants %}
+                    <div class="place-card">
+                        <div class="place-name">{{ item.name }}</div>
+                        <p class="place-desc">{{ item.description }}</p>
+                        <div class="place-meta">
+                            <span>💰 {{ item.price }}</span>
+                        </div>
+                    </div>
+                {% endfor %}
+                </div>
+            {% else %}
+                <div class="info-card"><p>{{ restaurants }}</p></div>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        {% if currency_rates %}
+            <section class="extra-section">
+                <h2>💱 Курсы валют</h2>
+                <div class="info-card">
+                    <p>Доллар США: {{ currency_rates.USD }} ₽</p>
+                    <p>Евро: {{ currency_rates.EUR }} ₽</p>
+                </div>
+            </section>
+        {% endif %}
+
+        {% if recommendations and recommendations is iterable and recommendations is not string %}
+            <div class="map-section">
+                <h3>📍 Карта достопримечательностей</h3>
+                <div id="map"></div>
+            </div>
+        {% endif %}
+
+        <footer>
+            <p>© 2026 Дипломный проект «Умный планировщик путешествий»</p>
+        </footer>
+    </div>
+
+    {% if recommendations and recommendations is iterable and recommendations is not string %}
+        <script>
+            window.placesData = {{ places_json | safe }};
+            window.cityCenter = {{ city_center_json | safe }};
+        </script>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="{{ url_for('static', filename='script.js') }}"></script>
+    {% endif %}
+
+    <script>
+        // Показ спиннера при отправке формы
+        document.getElementById('search-form').addEventListener('submit', function() {
+            document.getElementById('loading-spinner').style.display = 'block';
+            document.getElementById('submit-btn').disabled = true;
+        });
+
+        // Переключение темы
+        const toggle = document.getElementById('theme-toggle');
+        toggle.addEventListener('change', function() {
+            document.body.classList.toggle('dark-theme', this.checked);
+            localStorage.setItem('theme', this.checked ? 'dark' : 'light');
+        });
+        // Загрузка сохранённой темы
+        if (localStorage.getItem('theme') === 'dark') {
+            document.body.classList.add('dark-theme');
+            toggle.checked = true;
+        }
+    </script>
+</body>
+</html>
